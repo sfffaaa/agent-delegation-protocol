@@ -185,17 +185,13 @@ contract PolicyRegistry {
 
     function _parseAddress(bytes memory data) internal pure returns (address) {
         require(data.length == 42, "Invalid address length");
+        require(data[0] == 0x30 && data[1] == 0x78, "Missing 0x prefix");
 
-        bytes memory addrBytes = new bytes(20);
+        uint160 addr = 0;
         for (uint256 i = 0; i < 20; i++) {
-            addrBytes[i] = bytes1(_fromHexChar(uint8(data[2 + i * 2])) * 16 + _fromHexChar(uint8(data[3 + i * 2])));
+            addr = addr << 8 | uint160(_fromHexChar(uint8(data[2 + i * 2])) * 16 + _fromHexChar(uint8(data[3 + i * 2])));
         }
-
-        address addr;
-        assembly {
-            addr := mload(add(addrBytes, 20))
-        }
-        return addr;
+        return address(addr);
     }
 
     function _fromHexChar(uint8 c) internal pure returns (uint8) {
