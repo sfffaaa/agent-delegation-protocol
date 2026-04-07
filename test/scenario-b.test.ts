@@ -87,6 +87,26 @@ describe("Scenario B: Delegation Chain", function () {
         registry.connect(agentB).delegate(agentC.address, ONE_ETH, ONE_HOUR, [await mockTarget.getAddress()])
       ).to.be.revertedWith("No active policy");
     });
+
+    it("rejects delegation to agent with existing active policy", async function () {
+      await registry.connect(agentA).delegate(
+        agentB.address, THREE_ETH, TWO_HOURS, [await mockTarget.getAddress()]
+      );
+      // Agent A tries to re-delegate to B (already active)
+      await expect(
+        registry.connect(agentA).delegate(agentB.address, TWO_ETH, TWO_HOURS, [await mockTarget.getAddress()])
+      ).to.be.revertedWith("Agent already has active policy");
+    });
+
+    it("rejects circular delegation", async function () {
+      await registry.connect(agentA).delegate(
+        agentB.address, THREE_ETH, TWO_HOURS, [await mockTarget.getAddress()]
+      );
+      // B tries to delegate back to A (A has active policy from owner)
+      await expect(
+        registry.connect(agentB).delegate(agentA.address, TWO_ETH, TWO_HOURS, [await mockTarget.getAddress()])
+      ).to.be.revertedWith("Agent already has active policy");
+    });
   });
 
   describe("delegated agent execution", function () {

@@ -12,6 +12,8 @@ contract PolicyRegistry {
         bool active;
     }
 
+    uint256 public constant MAX_CHAIN_DEPTH = 10;
+
     address public owner;
     mapping(address => Policy) internal _policies;
     mapping(address => bool) public authorizedProxies;
@@ -98,6 +100,7 @@ contract PolicyRegistry {
     ) external {
         Policy storage myPolicy = _policies[msg.sender];
         require(myPolicy.active, "No active policy");
+        require(!_policies[toAgent].active, "Agent already has active policy");
         require(subCap <= myPolicy.spendingCap, "Sub-cap exceeds own cap");
         require(subPeriod >= myPolicy.periodSeconds, "Period cannot be shorter than delegator");
 
@@ -131,11 +134,11 @@ contract PolicyRegistry {
     }
 
     function getDelegationChain(address agent) external view returns (address[] memory) {
-        address[] memory chain = new address[](10);
+        address[] memory chain = new address[](MAX_CHAIN_DEPTH);
         uint256 length = 0;
         address current = agent;
 
-        for (uint256 i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < MAX_CHAIN_DEPTH; i++) {
             chain[length] = current;
             length++;
             if (_policies[current].delegatedBy == address(0)) break;
@@ -151,7 +154,7 @@ contract PolicyRegistry {
 
     function _isChainActive(address agent) internal view returns (bool) {
         address current = agent;
-        for (uint256 i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < MAX_CHAIN_DEPTH; i++) {
             Policy storage p = _policies[current];
             if (!p.active) return false;
             if (p.delegatedBy == address(0)) return true;
