@@ -76,6 +76,10 @@ contract PolicyRegistry {
         p.spent += amount;
     }
 
+    function emitActionApproved(address agent, address target, uint256 value, bytes4 selector) external {
+        emit ActionApproved(agent, target, value, selector);
+    }
+
     function _isChainActive(address agent) internal view returns (bool) {
         address current = agent;
         for (uint256 i = 0; i < 10; i++) {

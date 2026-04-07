@@ -87,4 +87,48 @@ describe("Scenario A: Single Agent Policy", function () {
       ).to.be.revertedWith("Exceeds spending cap");
     });
   });
+
+  describe("AgentProxy execution", function () {
+    let proxy: any;
+
+    beforeEach(async function () {
+      await registry.setPolicy(agent.address, TEN_ETH, ONE_HOUR, [await mockTarget.getAddress()]);
+
+      const AgentProxyFactory = await ethers.getContractFactory("AgentProxy");
+      proxy = await AgentProxyFactory.deploy(await registry.getAddress());
+
+      // Fund proxy with ETH for value transfers
+      await owner.sendTransaction({ to: await proxy.getAddress(), value: ethers.parseEther("100") });
+    });
+
+    it("agent executes call through proxy", async function () {
+      const calldata = mockTarget.interface.encodeFunctionData("setValue", [42]);
+      await proxy.connect(agent).execute(await mockTarget.getAddress(), 0, calldata);
+
+      expect(await mockTarget.value()).to.equal(42);
+    });
+
+    it("agent sends ETH through proxy", async function () {
+      const calldata = mockTarget.interface.encodeFunctionData("setValue", [99]);
+      await proxy.connect(agent).execute(await mockTarget.getAddress(), ONE_ETH, calldata);
+
+      expect(await mockTarget.value()).to.equal(99);
+    });
+
+    it("agent exceeding cap is rejected", async function () {
+      const ELEVEN_ETH = ethers.parseEther("11");
+      const calldata = mockTarget.interface.encodeFunctionData("setValue", [1]);
+      await expect(
+        proxy.connect(agent).execute(await mockTarget.getAddress(), ELEVEN_ETH, calldata)
+      ).to.be.revertedWith("Exceeds spending cap");
+    });
+
+    it("emits ActionApproved on success", async function () {
+      const calldata = mockTarget.interface.encodeFunctionData("setValue", [42]);
+      const selector = calldata.slice(0, 10);
+      await expect(proxy.connect(agent).execute(await mockTarget.getAddress(), 0, calldata))
+        .to.emit(registry, "ActionApproved")
+        .withArgs(agent.address, await mockTarget.getAddress(), 0, selector);
+    });
+  });
 });
