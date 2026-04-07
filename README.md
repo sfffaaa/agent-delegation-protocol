@@ -60,6 +60,43 @@ C calls AgentProxy.execute(DEX, 0.5 ETH, swapData)
 
 RBAC answers "can this role do X?" (boolean). ERC-4337 session keys answer "can this key spend up to Y?" (single level). This protocol answers **"how much trust flows through a chain of autonomous agents, and how do we revoke it cleanly?"** (multi-level, monotonically shrinking).
 
+## Why DID?
+
+Without DID, policies are bound to a wallet address. If an agent changes its wallet (redeployment, key rotation, switching from EOA to smart account), the policy breaks — the owner has to manually re-set it.
+
+DID adds an abstraction layer that separates **identity** from **wallet**:
+
+```
+Agent identity (DID): 0xDDD  ← never changes, represents "who this agent is"
+Agent wallet:         0xAAA  ← can change, represents "which address the agent uses now"
+```
+
+Think of DID as the agent's ID card, and the wallet as its bank card. The ID card stays the same; the bank card can be replaced.
+
+The DID contract is a simple key-value store per account:
+
+```
+DID Account (0xDDD)
+  ├── "wallet" → "0xAAA"
+  ├── "name"   → "AgentA"
+  └── "role"   → "trader"
+```
+
+When the owner sets a policy via DID, the contract resolves the wallet address automatically:
+
+```
+Owner: setPolicyByDID(didContract, 0xDDD, "wallet", 10 ETH, ...)
+
+Contract internally:
+  1. didContract.readAttribute(0xDDD, "wallet") → "0xAAA"
+  2. parseAddress("0xAAA") → address 0xAAA
+  3. Create policy for 0xAAA
+```
+
+The owner doesn't need to know the agent's wallet address — just its DID account and attribute name.
+
+> **Note:** The current implementation resolves the address once at policy creation time. Dynamic resolution (re-checking DID on every transaction) is a future improvement.
+
 ## Test Scenarios
 
 - **Scenario A**: Single agent policy — cap enforcement, whitelist, period reset
