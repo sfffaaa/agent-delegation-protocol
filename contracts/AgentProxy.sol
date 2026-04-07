@@ -20,7 +20,7 @@ contract AgentProxy {
         (bool success, bytes memory returnData) = target.call{value: value}(data);
         require(success, string(returnData));
 
-        bytes4 selector = bytes4(data[:4]);
+        bytes4 selector = data.length >= 4 ? bytes4(data[:4]) : bytes4(0);
         registry.emitActionApproved(msg.sender, target, value, selector);
     }
 

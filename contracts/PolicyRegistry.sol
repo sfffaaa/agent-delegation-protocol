@@ -14,6 +14,7 @@ contract PolicyRegistry {
 
     address public owner;
     mapping(address => Policy) internal _policies;
+    mapping(address => bool) public authorizedProxies;
 
     event PolicySet(address indexed owner, address indexed agent, uint256 cap, uint256 period);
     event PolicyDelegated(address indexed from, address indexed to, uint256 subCap);
@@ -26,8 +27,17 @@ contract PolicyRegistry {
         _;
     }
 
+    modifier onlyAuthorizedProxy() {
+        require(authorizedProxies[msg.sender], "Not authorized proxy");
+        _;
+    }
+
     constructor() {
         owner = msg.sender;
+    }
+
+    function setAuthorizedProxy(address proxy, bool authorized) external onlyOwner {
+        authorizedProxies[proxy] = authorized;
     }
 
     function setPolicy(
@@ -61,7 +71,7 @@ contract PolicyRegistry {
         return false;
     }
 
-    function recordSpend(address agent, uint256 amount, address target) external {
+    function recordSpend(address agent, uint256 amount, address target) external onlyAuthorizedProxy {
         Policy storage p = _policies[agent];
         require(p.active, "No active policy");
         require(_isChainActive(agent), "Delegation chain inactive");
@@ -76,7 +86,7 @@ contract PolicyRegistry {
         p.spent += amount;
     }
 
-    function emitActionApproved(address agent, address target, uint256 value, bytes4 selector) external {
+    function emitActionApproved(address agent, address target, uint256 value, bytes4 selector) external onlyAuthorizedProxy {
         emit ActionApproved(agent, target, value, selector);
     }
 

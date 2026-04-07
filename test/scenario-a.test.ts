@@ -50,6 +50,7 @@ describe("Scenario A: Single Agent Policy", function () {
   describe("checkPolicy", function () {
     beforeEach(async function () {
       await registry.setPolicy(agent.address, TEN_ETH, ONE_HOUR, [await mockTarget.getAddress()]);
+      await registry.setAuthorizedProxy(agent.address, true);
     });
 
     it("allows action within cap and whitelist", async function () {
@@ -96,6 +97,7 @@ describe("Scenario A: Single Agent Policy", function () {
 
       const AgentProxyFactory = await ethers.getContractFactory("AgentProxy");
       proxy = await AgentProxyFactory.deploy(await registry.getAddress());
+      await registry.setAuthorizedProxy(await proxy.getAddress(), true);
 
       // Fund proxy with ETH for value transfers
       await owner.sendTransaction({ to: await proxy.getAddress(), value: ethers.parseEther("100") });
@@ -129,6 +131,22 @@ describe("Scenario A: Single Agent Policy", function () {
       await expect(proxy.connect(agent).execute(await mockTarget.getAddress(), 0, calldata))
         .to.emit(registry, "ActionApproved")
         .withArgs(agent.address, await mockTarget.getAddress(), 0, selector);
+    });
+
+    it("unauthorized direct recordSpend call is rejected", async function () {
+      await expect(
+        registry.connect(stranger).recordSpend(agent.address, ONE_ETH, await mockTarget.getAddress())
+      ).to.be.revertedWith("Not authorized proxy");
+    });
+
+    it("plain ETH transfer with empty calldata through proxy succeeds", async function () {
+      const targetAddress = await mockTarget.getAddress();
+      const balanceBefore = await ethers.provider.getBalance(targetAddress);
+
+      await proxy.connect(agent).execute(targetAddress, ONE_ETH, "0x");
+
+      const balanceAfter = await ethers.provider.getBalance(targetAddress);
+      expect(balanceAfter - balanceBefore).to.equal(ONE_ETH);
     });
   });
 });
