@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+import "./mocks/did.sol";
+
 contract PolicyRegistry {
     struct Policy {
         uint256 spendingCap;
@@ -19,6 +21,7 @@ contract PolicyRegistry {
     mapping(address => bool) public authorizedProxies;
 
     event PolicySet(address indexed owner, address indexed agent, uint256 cap, uint256 period);
+    event DIDPolicySet(address indexed didAccount, bytes name, address indexed agent);
     event PolicyDelegated(address indexed from, address indexed to, uint256 subCap);
     event DelegateRevoked(address indexed revoker, address indexed agent);
     event ActionApproved(address indexed agent, address target, uint256 value, bytes4 selector);
@@ -150,6 +153,56 @@ contract PolicyRegistry {
             result[i] = chain[i];
         }
         return result;
+    }
+
+    function setPolicyByDID(
+        address didContract,
+        address didAccount,
+        bytes calldata name,
+        uint256 spendingCap,
+        uint256 periodSeconds,
+        address[] calldata whitelist
+    ) external onlyOwner {
+        DID didInstance = DID(didContract);
+        DID.Attribute memory attr = didInstance.readAttribute(didAccount, name);
+        require(attr.value.length > 0, "DID attribute empty");
+
+        // Parse agent address from DID attribute value (ASCII hex string like "0xabc...")
+        address agent = _parseAddress(attr.value);
+
+        _policies[agent] = Policy({
+            spendingCap: spendingCap,
+            periodSeconds: periodSeconds,
+            spent: 0,
+            periodStart: block.timestamp,
+            whitelist: whitelist,
+            delegatedBy: address(0),
+            active: true
+        });
+
+        emit DIDPolicySet(didAccount, name, agent);
+    }
+
+    function _parseAddress(bytes memory data) internal pure returns (address) {
+        require(data.length == 42, "Invalid address length");
+
+        bytes memory addrBytes = new bytes(20);
+        for (uint256 i = 0; i < 20; i++) {
+            addrBytes[i] = bytes1(_fromHexChar(uint8(data[2 + i * 2])) * 16 + _fromHexChar(uint8(data[3 + i * 2])));
+        }
+
+        address addr;
+        assembly {
+            addr := mload(add(addrBytes, 20))
+        }
+        return addr;
+    }
+
+    function _fromHexChar(uint8 c) internal pure returns (uint8) {
+        if (c >= 48 && c <= 57) return c - 48;       // '0'-'9'
+        if (c >= 97 && c <= 102) return c - 87;       // 'a'-'f'
+        if (c >= 65 && c <= 70) return c - 55;        // 'A'-'F'
+        revert("Invalid hex char");
     }
 
     function _isChainActive(address agent) internal view returns (bool) {
