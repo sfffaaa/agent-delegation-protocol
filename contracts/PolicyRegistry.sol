@@ -90,6 +90,65 @@ contract PolicyRegistry {
         emit ActionApproved(agent, target, value, selector);
     }
 
+    function delegate(
+        address toAgent,
+        uint256 subCap,
+        uint256 subPeriod,
+        address[] calldata subWhitelist
+    ) external {
+        Policy storage myPolicy = _policies[msg.sender];
+        require(myPolicy.active, "No active policy");
+        require(subCap <= myPolicy.spendingCap, "Sub-cap exceeds own cap");
+        require(subPeriod >= myPolicy.periodSeconds, "Period cannot be shorter than delegator");
+
+        for (uint256 i = 0; i < subWhitelist.length; i++) {
+            require(isWhitelisted(msg.sender, subWhitelist[i]), "Target not in delegator whitelist");
+        }
+
+        _policies[toAgent] = Policy({
+            spendingCap: subCap,
+            periodSeconds: subPeriod,
+            spent: 0,
+            periodStart: block.timestamp,
+            whitelist: subWhitelist,
+            delegatedBy: msg.sender,
+            active: true
+        });
+
+        emit PolicyDelegated(msg.sender, toAgent, subCap);
+    }
+
+    function revokeDelegate(address agent) external {
+        Policy storage p = _policies[agent];
+        require(p.delegatedBy == msg.sender, "Not the delegator");
+        p.active = false;
+        emit DelegateRevoked(msg.sender, agent);
+    }
+
+    function revokePolicy(address agent) external onlyOwner {
+        _policies[agent].active = false;
+        emit DelegateRevoked(msg.sender, agent);
+    }
+
+    function getDelegationChain(address agent) external view returns (address[] memory) {
+        address[] memory chain = new address[](10);
+        uint256 length = 0;
+        address current = agent;
+
+        for (uint256 i = 0; i < 10; i++) {
+            chain[length] = current;
+            length++;
+            if (_policies[current].delegatedBy == address(0)) break;
+            current = _policies[current].delegatedBy;
+        }
+
+        address[] memory result = new address[](length);
+        for (uint256 i = 0; i < length; i++) {
+            result[i] = chain[i];
+        }
+        return result;
+    }
+
     function _isChainActive(address agent) internal view returns (bool) {
         address current = agent;
         for (uint256 i = 0; i < 10; i++) {
